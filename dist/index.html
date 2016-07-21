@@ -14,40 +14,67 @@
     <script src="/horizon/horizon.js" type="text/javascript"></script>
     <script type="text/javascript">
 
-      const E = 100
+      const E = 1
       const squaresDiv = document.querySelector("#squares");
       const addElement = () => {
         const e = document.createElement('div');
         e.style['background-color'] = randomColor();
-        e.style['height'] = (window.innerHeight / E) + 'px';
-        e.style['width'] = (window.innerWidth / E) + 'px';
+        e.style['height'] = '10px';
+        e.style['width'] = '10px';
         e.style['float'] = 'left';
         squaresDiv.appendChild(e)
         return e;
       }
 
-      const table_names = _.range(1,E + 1).map((n) => {return `table_${n}`});
+      const docs = _.range(1,E + 1)
       const horizon = Horizon();
+      const elements = new Map();
+      const seen = new Map();
+      let begin, end;
       horizon.connect();
-      const collections = new Map();
-      table_names.map((name) => {
-        collections.set(name, horizon(name));
-        const e = addElement();
-        horizon(name).find(1).watch().subscribe((doc) => {
-          e.style['background-color'] = doc['color'];
+
+      docs.map((doc_id) => {
+        elements.set(doc_id, addElement());
+      });
+      
+      docs.map((doc_id) => {
+        console.log("DOC_ID => "+ doc_id)
+        horizon('bench').find(doc_id).watch().subscribe((doc) => {
+          if (!seen.has('current') || seen.get('current') !== doc['version']){
+            seen.set('current', doc['version']);
+            seen.set('count', 0);
+            begin = performance.now();
+            console.log("init")
+          }
+
+          const newCount = seen.get("count") + 1;
+          seen.set("count", newCount);
+          console.log("COUNT => " + seen.get('count'))
+          if (seen.get('count') === E){
+            console.log("Millis elapsed to see all docs => " + (performance.now() - begin));
+          }
+          elements.get(doc['id']).style['background-color'] = doc['color'];
         });
       });
 
+      let v = 1
       let newColors = () => {
-        for (var [name, collection] of collections.entries()) {
-          collection.upsert({
-            id: 1,
-            color: randomColor()
-          });
-        };
-      }
+        let now = performance.now();
+        console.log("v"+v)
+        docs.map((doc_id) => {
+          console.log("UPDATING => " + doc_id)
+          horizon('bench').upsert({
+            id: doc_id,
+            color: randomColor(),
+            version: v,
+          })
+        });
+        let later = performance.now() - now;
+        v++;
+        console.log("Millis elapsed sending upserts - " + later );
+      };
 
-      setInterval(newColors, 1000);
+      setInterval(newColors, 2000);
     </script>
   </body>
 </html>
